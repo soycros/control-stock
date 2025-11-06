@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="icon" href="icono.png" type="image/png">
+  <link rel="apple-touch-icon" href="icono.png">
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#2196f3">
+
+  <title>Control de Stock – Limpieza</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background-color: #f7f7f7;
+      margin: 0;
+      padding: 15px;
+    }
+
+    h1 {
+      text-align: center;
+      margin-bottom: 5px;
+      font-size: 22px;
+    }
+
+    #info {
+      text-align: center;
+      font-size: 14px;
+      color: #555;
+      margin-bottom: 15px;
+    }
+
+    .top-buttons {
+      display: flex;
+      justify-content: center;
+      gap: 10px;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+    }
+
+    .reset {
+      background-color: #ff9800;
+      color: white;
+      border: none;
+      padding: 10px 15px;
+      border-radius: 8px;
+      font-size: 14px;
+      cursor: pointer;
+    }
+
+    .item {
+      background: white;
+      border-radius: 8px;
+      box-shadow: 0 0 5px #ccc;
+      margin-bottom: 10px;
+      padding: 10px;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .item-name {
+      font-weight: bold;
+      margin-bottom: 8px;
+      word-break: break-word;
+    }
+
+    .controls {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    button {
+      border: none;
+      border-radius: 6px;
+      padding: 10px 14px;
+      font-size: 18px;
+      cursor: pointer;
+      color: white;
+      flex: 1;
+      margin: 0 5px;
+    }
+
+    .plus { background-color: #4caf50; }
+    .minus { background-color: #f44336; }
+    .count {
+      font-size: 18px;
+      min-width: 40px;
+      text-align: center;
+    }
+
+    .download {
+      display: block;
+      width: 100%;
+      margin: 25px auto;
+      background-color: #2196f3;
+      color: white;
+      padding: 12px;
+      font-size: 18px;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+    }
+
+    @media (min-width: 700px) {
+      .item {
+        flex-direction: row;
+        justify-content: space-between;
+        align-items: center;
+      }
+      .item-name {
+        margin-bottom: 0;
+        flex: 1;
+      }
+      .controls {
+        flex: none;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <h1>📦 Control de Stock – Limpieza</h1>
+  <div id="info"></div>
+
+  <div class="top-buttons">
+    <button class="reset" onclick="reiniciarLista()">🗑️ Reiniciar lista</button>
+  </div>
+
+  <div id="list"></div>
+
+  <button class="download" onclick="descargarInforme()">📄 Descargar informe</button>
+  <button class="download" style="background-color:#4caf50" onclick="enviarAlServidor()">💾 Enviar al servidor</button>
+
+  <script>
+    // 👉 Cambiá esta IP por la de tu PC cuando corras el servidor Node.js
+    const SERVER_URL = "http://192.168.0.15:3000/upload";
+
+    const grupos = [
+      [
+        "PH01 (Papel Higiénico)",
+        "TOAM01 (Toallas de Mano)"
+      ],
+      [
+        "DEP (Desodorante de Piso X 5 Litros)",
+        "LVD01 (Lavandina X 5 Litros)",
+        "LV01 (Limpia Vidrio X 5 Litros)",
+        "DET01 (Detergente X 5 Litros)",
+        "JL01 (Jabón Líquido de manos X 5 Litros)"
+      ],
+      [
+        "CC01 (CIF)",
+        "DA (Poet)",
+        "IRC (Raid Mata Cucarachas)",
+        "IRM (Raid Mata Mosquitos)"
+      ],
+      [
+        "TPP01 (Trapo de Piso)",
+        "TR01 (Trapo Rejilla)",
+        "FRN01 (Trapo Naranja o Franela)"
+      ],
+      [
+        "BLS05 (Bolsas Cristal/ Mercadería)",
+        "BLS04 (Rollo de Bolsas 50x70)",
+        "GL01 (Guantes de limpieza)",
+        "ESB (Escobillón)",
+        "PL (Palo de Escobillón)",
+        "PALA (Pala para Escoba)",
+        "SEC (Secador de Piso)",
+        "PLM (Plumero)",
+        "RC01 (Rociador Líquido para Vidriera)",
+        "ELV01 (Escurridor de Limpia Vidrios) (El equipo)",
+        "ESP01 (Esponja)",
+        "CI01 (Cepillo para Inodoro)",
+        "SOC01 (Sopapa o Chupon)",
+        "BAL01 (Balde o Tobo para limpieza)",
+        "TB01 (Tacho o Papelera de Baño) (Oficial no tachos reusados)",
+        "Dispense de Jabón de Baño"
+      ]
+    ];
+
+    const items = grupos.flat();
+    const STORAGE_KEY = "stockData";
+    const EXPIRATION_KEY = "stockExpiration";
+
+    function loadStock() {
+      const now = Date.now();
+      const expiry = localStorage.getItem(EXPIRATION_KEY);
+      if (expiry && now > parseInt(expiry)) {
+        localStorage.removeItem(STORAGE_KEY);
+        localStorage.removeItem(EXPIRATION_KEY);
+      }
+
+      let data = JSON.parse(localStorage.getItem(STORAGE_KEY));
+      if (!data) {
+        data = {};
+        items.forEach(item => data[item] = 0);
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+        localStorage.setItem(EXPIRATION_KEY, now + 24 * 60 * 60 * 1000);
+      }
+      return data;
+    }
+
+    let stock = loadStock();
+
+    function saveStock() {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(stock));
+      localStorage.setItem(EXPIRATION_KEY, Date.now() + 24 * 60 * 60 * 1000);
+    }
+
+    function renderList() {
+      const container = document.getElementById("list");
+      container.innerHTML = "";
+
+      grupos.forEach((grupo, index) => {
+        grupo.forEach(item => {
+          const div = document.createElement("div");
+          div.className = "item";
+          div.innerHTML = `
+            <div class="item-name">${item}</div>
+            <div class="controls">
+              <button class="minus" onclick="change('${item}', -1)">–</button>
+              <span class="count" id="${item}">${stock[item]}</span>
+              <button class="plus" onclick="change('${item}', 1)">+</button>
+            </div>
+          `;
+          container.appendChild(div);
+        });
+        if (index < grupos.length - 1) {
+          const espacio = document.createElement("div");
+          espacio.style.height = "15px";
+          container.appendChild(espacio);
+        }
+      });
+
+      mostrarInfo();
+    }
+
+    async function change(item, value) {
+      stock[item] = Math.max(0, (stock[item] || 0) + value);
+      document.getElementById(item).textContent = stock[item];
+      saveStock();
+
+      // Intentar sincronizar automáticamente si el servidor está disponible
+      try {
+        await fetch(SERVER_URL, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(stock)
+        });
+        console.log("✅ Datos sincronizados con el servidor.");
+      } catch (err) {
+        console.log("⚠️ No se pudo conectar al servidor.");
+      }
+    }
+
+    function mostrarInfo() {
+      const expiry = localStorage.getItem(EXPIRATION_KEY);
+      if (expiry) {
+        const fecha = new Date(parseInt(expiry));
+        document.getElementById("info").innerHTML =
+          `🕒 Los datos se borrarán automáticamente el <strong>${fecha.toLocaleDateString()} ${fecha.toLocaleTimeString()}</strong> si no reiniciás antes.`;
+      }
+    }
+
+    function reiniciarLista() {
+      if (confirm("¿Seguro que querés reiniciar toda la lista? Se borrarán los datos actuales.")) {
+        localStorage.removeItem(STORAGE_KEY);
+        localStorage.removeItem(EXPIRATION_KEY);
+        stock = loadStock();
+        renderList();
+      }
+    }
+
+    function descargarInforme() {
+      let contenido = "\uFEFF" + "Informe de Stock - Limpieza\n";
+      contenido += "Generado: " + new Date().toLocaleString() + "\n\n";
+
+      grupos.forEach(grupo => {
+        grupo.forEach(item => {
+          contenido += `${item}: ${stock[item]}\n`;
+        });
+        contenido += "\n";
+      });
+
+      const blob = new Blob([contenido], { type: "text/plain;charset=utf-8" });
+      const enlace = document.createElement("a");
+      enlace.href = URL.createObjectURL(blob);
+      enlace.download = `stock_limpieza_${new Date().toISOString().slice(0,10)}.txt`;
+      enlace.click();
+    }
+
+    async function enviarAlServidor() {
+      try {
+        const resp = await fetch(SERVER_URL, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(stock)
+        });
+        const data = await resp.json();
+        alert("✅ " + (data.message || "Datos enviados correctamente al servidor."));
+      } catch (err) {
+        alert("⚠️ No se pudo conectar al servidor. Verificá que la PC esté encendida y en la misma red WiFi.");
+      }
+    }
+
+    renderList();
+  </script>
+</body>
+</html>
